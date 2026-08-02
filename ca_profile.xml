@@ -1,0 +1,6 @@
+<CommunityApplications>
+  <Profile>Community Applications repository maintained by Peter Hecko for privacy-focused, self-hosted and Unraid-ready Docker applications. Find My Timeline is maintained here as an unofficial Unraid-focused fork with tested Docker images, persistent appdata configuration, versioned releases and documented update, backup and security procedures.</Profile>
+  <Icon>https://raw.githubusercontent.com/heckpiet/find-my-timeline-unraid/master/icon.svg</Icon>
+  <WebPage>https://github.com/heckpiet/find-my-timeline-unraid</WebPage>
+  <Forum>https://github.com/heckpiet/find-my-timeline-unraid/issues</Forum>
+</CommunityApplications>

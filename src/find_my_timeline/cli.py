@@ -3,27 +3,29 @@
 import logging
 import os
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from threading import Thread
 
 import click
 from dotenv import load_dotenv
 
-from .auth import ICloudAuth, AuthenticationError
+from .auth import AuthenticationError, ICloudAuth
 from .database import LocationDatabase
 from .poller import LocationPoller
 from .web import create_app
 
-# Load environment variables
 load_dotenv()
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
 )
-logger = logging.getLogger(__name__)
+
+try:
+    APP_VERSION = version("find-my-timeline")
+except PackageNotFoundError:
+    APP_VERSION = "development"
 
 
 def get_config():
@@ -40,43 +42,31 @@ def get_config():
 
 
 @click.group()
-@click.version_option(version="0.1.0")
+@click.version_option(version=APP_VERSION)
 def main():
     """Find My Timeline - Track your Apple device locations over time."""
-    pass
 
 
 @main.command()
 @click.option("--username", "-u", help="iCloud username (Apple ID)")
 @click.option("--password", "-p", help="iCloud password", hide_input=True)
 def auth(username, password):
-    """Authenticate with iCloud and store session."""
+    """Authenticate with iCloud and store the session."""
     config = get_config()
-    username = username or config["username"]
-
-    if not username:
-        username = click.prompt("Enter your Apple ID")
-
-    password = password or config["password"]
-    if not password:
-        password = click.prompt("Enter your password", hide_input=True)
-
+    username = username or config["username"] or click.prompt("Enter your Apple ID")
+    password = password or config["password"] or click.prompt("Enter your password", hide_input=True)
     click.echo(f"Authenticating as {username}...")
-
     try:
-        auth_handler = ICloudAuth(username, password)
-        auth_handler.authenticate()
-        click.echo("Authentication successful! Session saved.")
-
-        # Show devices
-        devices = auth_handler.get_devices()
-        click.echo(f"\nFound {len(devices)} device(s):")
+        handler = ICloudAuth(username, password)
+        handler.authenticate()
+        click.echo("Authentication successful. Session and metadata saved.")
+        devices = handler.get_devices()
+        click.echo(f"Found {len(devices)} device(s):")
         for device in devices:
             location_status = "Has location" if device.get("location") else "No location"
             click.echo(f"  - {device['name']} ({device['device_display_name']}) - {location_status}")
-
-    except AuthenticationError as e:
-        click.echo(f"Authentication failed: {e}", err=True)
+    except AuthenticationError as exc:
+        click.echo(f"Authentication failed: {exc}", err=True)
         sys.exit(1)
 
 
@@ -88,35 +78,17 @@ def auth(username, password):
 def poll(username, password, min_interval, max_interval):
     """Start the location polling service."""
     config = get_config()
-
     username = username or config["username"]
     password = password or config["password"]
     min_interval = min_interval or config["min_interval"]
     max_interval = max_interval or config["max_interval"]
-
     if not username:
-        click.echo("Error: iCloud username required. Set ICLOUD_USERNAME or use --username", err=True)
+        click.echo("Error: ICLOUD_USERNAME is required", err=True)
         sys.exit(1)
-
-    click.echo(f"Starting poller (interval: {min_interval}-{max_interval} minutes)")
-    click.echo(f"Database: {config['db_path']}")
-
-    auth_handler = ICloudAuth(username, password)
+    handler = ICloudAuth(username, password)
     database = LocationDatabase(config["db_path"])
-    poller = LocationPoller(
-        auth=auth_handler,
-        database=database,
-        min_interval=min_interval,
-        max_interval=max_interval,
-    )
-
-    # Add callback to log recorded locations
-    def on_poll(locations):
-        if locations:
-            click.echo(f"Recorded {len(locations)} location(s)")
-
-    poller.on_poll(on_poll)
-
+    poller = LocationPoller(handler, database, min_interval, max_interval)
+    poller.on_poll(lambda locations: click.echo(f"Recorded {len(locations)} location(s)") if locations else None)
     try:
         poller.start()
     except KeyboardInterrupt:
@@ -129,13 +101,11 @@ def poll(username, password, min_interval, max_interval):
 def web(host, port):
     """Start the web interface."""
     config = get_config()
-
+    database = LocationDatabase(config["db_path"])
+    handler = ICloudAuth(config["username"], config["password"]) if config["username"] else None
+    app = create_app(database, handler)
     host = host or config["web_host"]
     port = port or config["web_port"]
-
-    database = LocationDatabase(config["db_path"])
-    app = create_app(database)
-
     click.echo(f"Starting web server at http://{host}:{port}")
     app.run(host=host, port=port, debug=False)
 
@@ -148,40 +118,30 @@ def web(host, port):
 def start(username, password, host, port):
     """Start both the poller and web interface."""
     config = get_config()
-
     username = username or config["username"]
     password = password or config["password"]
     host = host or config["web_host"]
     port = port or config["web_port"]
-
     if not username:
-        click.echo("Error: iCloud username required. Set ICLOUD_USERNAME or use --username", err=True)
+        click.echo("Error: ICLOUD_USERNAME is required", err=True)
         sys.exit(1)
 
-    auth_handler = ICloudAuth(username, password)
+    handler = ICloudAuth(username, password)
     database = LocationDatabase(config["db_path"])
-
-    # Create poller
     poller = LocationPoller(
-        auth=auth_handler,
+        auth=handler,
         database=database,
         min_interval=config["min_interval"],
         max_interval=config["max_interval"],
     )
+    app = create_app(database, handler)
 
-    # Create web app
-    app = create_app(database)
-
-    click.echo(f"Starting Find My Timeline")
+    click.echo("Starting Find My Timeline")
     click.echo(f"  Polling interval: {config['min_interval']}-{config['max_interval']} minutes")
     click.echo(f"  Web interface: http://{host}:{port}")
     click.echo(f"  Database: {config['db_path']}")
 
-    # Start poller in background thread
-    poller_thread = Thread(target=poller.start, daemon=True)
-    poller_thread.start()
-
-    # Start web server in main thread
+    Thread(target=poller.start, daemon=True).start()
     try:
         app.run(host=host, port=port, debug=False, use_reloader=False)
     except KeyboardInterrupt:
@@ -194,27 +154,19 @@ def stats():
     """Show database statistics."""
     config = get_config()
     db_path = Path(config["db_path"])
-
     if not db_path.exists():
-        click.echo("No database found. Run 'poll' first to start collecting data.")
+        click.echo("No database found. Run 'poll' first.")
         return
-
     database = LocationDatabase(db_path)
     devices = database.get_devices()
-    total = database.get_location_count()
-
     click.echo(f"Database: {db_path}")
-    click.echo(f"Total locations: {total:,}")
+    click.echo(f"Total locations: {database.get_location_count():,}")
     click.echo(f"Devices: {len(devices)}")
-
     for device in devices:
-        count = database.get_location_count(device["id"])
         latest = database.get_latest_location(device["id"])
-        latest_time = latest["timestamp"] if latest else "Never"
-
         click.echo(f"\n  {device['name']} ({device['device_display_name']})")
-        click.echo(f"    Locations: {count:,}")
-        click.echo(f"    Last seen: {latest_time}")
+        click.echo(f"    Locations: {database.get_location_count(device['id']):,}")
+        click.echo(f"    Last seen: {latest['timestamp'] if latest else 'Never'}")
 
 
 @main.command()
@@ -222,21 +174,11 @@ def devices():
     """List all tracked devices."""
     config = get_config()
     db_path = Path(config["db_path"])
-
     if not db_path.exists():
-        click.echo("No database found. Run 'poll' first to start collecting data.")
+        click.echo("No database found. Run 'poll' first.")
         return
-
     database = LocationDatabase(db_path)
-    device_list = database.get_devices()
-
-    if not device_list:
-        click.echo("No devices found.")
-        return
-
-    click.echo(f"Tracked devices ({len(device_list)}):\n")
-
-    for device in device_list:
+    for device in database.get_devices():
         latest = database.get_latest_location(device["id"])
         click.echo(f"  {device['name']}")
         click.echo(f"    Type: {device['device_display_name']}")

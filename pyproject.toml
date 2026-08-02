@@ -1,7 +1,7 @@
 [project]
 name = "find-my-timeline"
-version = "0.1.0"
-description = "Track historical location data from Apple Find My devices"
+version = "0.2.0"
+description = "Self-hosted Apple Find My location history for Unraid"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
