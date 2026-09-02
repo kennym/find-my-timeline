@@ -1,0 +1,32 @@
+<Container version="2">
+  <Name>Find My Timeline</Name>
+  <Repository>ghcr.io/heckpiet/find-my-timeline-unraid:latest</Repository>
+  <Registry>https://github.com/heckpiet/find-my-timeline-unraid/pkgs/container/find-my-timeline-unraid</Registry>
+  <Network>bridge</Network>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Icon>https://raw.githubusercontent.com/heckpiet/find-my-timeline-unraid/master/icon.svg</Icon>
+  <WebUI>http://[IP]:[PORT:5000]/</WebUI>
+  <Overview>Unofficial self-hosted timeline for historical location data from devices available through Apple's Find My service. Location history is stored locally in SQLite.</Overview>
+  <Support>https://github.com/heckpiet/find-my-timeline-unraid/issues</Support>
+  <Project>https://github.com/heckpiet/find-my-timeline-unraid</Project>
+  <TemplateURL>https://raw.githubusercontent.com/heckpiet/find-my-timeline-unraid/master/templates/find-my-timeline.xml</TemplateURL>
+  <ReadMe>https://raw.githubusercontent.com/heckpiet/find-my-timeline-unraid/master/README.md</ReadMe>
+  <Category>Tools:Utilities</Category>
+  <ExtraSearchTerms>Apple Find My location history timeline iCloud tracking map</ExtraSearchTerms>
+  <Requires>Apple ID with two-factor authentication and internet access. Initial authentication must be completed in the container console. Do not expose the WebUI directly to the internet.</Requires>
+  <Changes>Initial Unraid Community Applications release.</Changes>
+  <Date>2026-07-24</Date>
+  <MinVer>6.12.0</MinVer>
+  <License>MIT</License>
+  <Config Name="WebUI" Target="5000" Default="5000" Mode="tcp" Description="HTTP port for the WebUI." Type="Port" Display="always" Required="true" Mask="false"/>
+  <Config Name="Database" Target="/app/data" Default="/mnt/user/appdata/find-my-timeline/data" Mode="rw" Description="Persistent SQLite database directory." Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Apple Session" Target="/root/.find-my-timeline" Default="/mnt/user/appdata/find-my-timeline/session" Mode="rw" Description="Persistent Apple authentication session and cookies." Type="Path" Display="always" Required="true" Mask="false"/>
+  <Config Name="Apple ID" Target="ICLOUD_USERNAME" Default="" Description="Apple ID email address. The password is entered interactively during first authentication." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Minimum polling interval" Target="POLL_MIN_INTERVAL" Default="7" Description="Minimum number of minutes between location requests." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Maximum polling interval" Target="POLL_MAX_INTERVAL" Default="10" Description="Maximum number of minutes between location requests." Type="Variable" Display="always" Required="true" Mask="false"/>
+  <Config Name="Database path" Target="DATABASE_PATH" Default="/app/data/locations.db" Description="Database path inside the container." Type="Variable" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Web host" Target="WEB_HOST" Default="0.0.0.0" Description="Web server binding inside the container." Type="Variable" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Web port" Target="WEB_PORT" Default="5000" Description="Internal web server port." Type="Variable" Display="advanced" Required="true" Mask="false"/>
+  <Config Name="Timezone" Target="TZ" Default="Europe/Berlin" Description="Container timezone, for example Europe/Berlin." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>

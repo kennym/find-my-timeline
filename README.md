@@ -1,77 +1,119 @@
-# Find My Timeline
+# Find My Timeline for Unraid
 
-Track historical location data from your Apple devices using the Find My service.
+Unofficial Unraid-ready fork of [kennym/find-my-timeline](https://github.com/kennym/find-my-timeline).
+
+Find My Timeline polls devices available through Apple's Find My service at configurable intervals and stores their historical positions in a local SQLite database. The WebUI displays devices, routes and timelines on an interactive map.
+
+> This project is not affiliated with or endorsed by Apple or Lime Technology.
 
 ![Preview](preview.png)
 ![Preview Detail](preview2.png)
 ![Preview Timeline](preview3.png)
 
-Apple's Find My only shows current device locations. This tool polls your devices at random intervals and stores the history in a local database, letting you view location timelines on a map.
+## Unraid installation
 
-## Setup
+Install the app from Community Applications once published, or use the template directly:
 
-```bash
-pip install -e .
-cp .env.example .env
-# Edit .env with your Apple ID
+```text
+https://raw.githubusercontent.com/heckpiet/find-my-timeline-unraid/master/templates/find-my-timeline.xml
 ```
 
-## Usage
+The Docker image is published through GitHub Container Registry:
+
+```text
+ghcr.io/heckpiet/find-my-timeline-unraid:latest
+```
+
+### First authentication
+
+1. Install the container and set `ICLOUD_USERNAME` to your Apple ID email address.
+2. Keep both persistent paths enabled:
+   - `/app/data`
+   - `/root/.find-my-timeline`
+3. Open the container console in Unraid.
+4. Run:
 
 ```bash
-# First-time: authenticate (handles 2FA)
 find-my-timeline auth
+```
 
-# Start polling + web UI
-find-my-timeline start
+5. Enter your Apple ID password and the newly requested two-factor authentication code.
+6. Restart the container.
 
-# Open http://127.0.0.1:5000 in your browser
+The Apple session is stored in the persistent session path. Re-run the command when Apple expires the session.
+
+## Configuration
+
+| Variable | Default | Description |
+|---|---:|---|
+| `ICLOUD_USERNAME` | — | Apple ID email address |
+| `ICLOUD_PASSWORD` | unset | Optional; entering the password interactively is recommended |
+| `POLL_MIN_INTERVAL` | `7` | Minimum interval between requests in minutes |
+| `POLL_MAX_INTERVAL` | `10` | Maximum interval between requests in minutes |
+| `DATABASE_PATH` | `/app/data/locations.db` | SQLite database path |
+| `WEB_HOST` | `0.0.0.0` | Web server binding inside the container |
+| `WEB_PORT` | `5000` | Internal WebUI port |
+| `TZ` | `Europe/Berlin` in the Unraid template | Container timezone |
+
+## Persistent data
+
+| Container path | Purpose |
+|---|---|
+| `/app/data` | SQLite database containing device and location history |
+| `/root/.find-my-timeline` | Apple session and cookie files |
+
+Back up both paths, especially `/app/data`.
+
+## Security notice
+
+The current WebUI does not provide its own authentication. Do not expose port 5000 directly to the internet. Access it through your trusted local network, a VPN such as WireGuard or Tailscale, or a reverse proxy with authentication.
+
+Location data is sensitive personal information. Protect the appdata directory and its backups accordingly.
+
+## Docker usage outside Unraid
+
+```bash
+mkdir -p data session
+
+docker run -d \
+  --name find-my-timeline \
+  --restart unless-stopped \
+  -p 5000:5000 \
+  -e ICLOUD_USERNAME=your-apple-id@example.com \
+  -e POLL_MIN_INTERVAL=7 \
+  -e POLL_MAX_INTERVAL=10 \
+  -v "$(pwd)/data:/app/data" \
+  -v "$(pwd)/session:/root/.find-my-timeline" \
+  ghcr.io/heckpiet/find-my-timeline-unraid:latest
+```
+
+Authenticate interactively afterward:
+
+```bash
+docker exec -it find-my-timeline find-my-timeline auth
+docker restart find-my-timeline
 ```
 
 ## Commands
 
 | Command | Description |
-|---------|-------------|
-| `auth` | Authenticate with iCloud (interactive 2FA) |
-| `poll` | Start location polling only |
-| `web` | Start web interface only |
-| `start` | Start both poller and web UI |
-| `stats` | Show database statistics |
-| `devices` | List tracked devices |
+|---|---|
+| `find-my-timeline auth` | Authenticate with iCloud and handle 2FA |
+| `find-my-timeline poll` | Start location polling only |
+| `find-my-timeline web` | Start the WebUI only |
+| `find-my-timeline start` | Start polling and the WebUI |
+| `find-my-timeline stats` | Show database statistics |
+| `find-my-timeline devices` | List tracked devices |
 
-## Configuration
+## Community Applications publishing checklist
 
-Set in `.env` or pass as CLI options:
+1. Merge the Unraid preparation branch into `master`.
+2. Confirm the GitHub Actions Docker workflow succeeds.
+3. Open the package settings for `ghcr.io/heckpiet/find-my-timeline-unraid` and set the package visibility to **Public**.
+4. Pull and test `ghcr.io/heckpiet/find-my-timeline-unraid:latest` on Unraid.
+5. Validate and scan the repository at the Unraid Community Applications submission portal.
+6. Submit the repository for review once all checks pass.
 
-- `ICLOUD_USERNAME` - Your Apple ID
-- `ICLOUD_PASSWORD` - Password (optional, will prompt)
-- `POLL_MIN_INTERVAL` - Minimum poll interval in minutes (default: 7)
-- `POLL_MAX_INTERVAL` - Maximum poll interval in minutes (default: 10)
-- `DATABASE_PATH` - SQLite database path (default: ./data/locations.db)
-- `WEB_HOST` / `WEB_PORT` - Web server binding (default: 127.0.0.1:5000)
+## License and attribution
 
-## Docker
-
-### First-time setup (interactive 2FA required)
-
-```bash
-cp .env.example .env
-# Edit .env with your Apple ID
-
-mkdir -p session data
-docker compose run --rm find-my-timeline find-my-timeline auth
-# Enter 2FA code when prompted
-```
-
-### Run
-
-```bash
-docker compose up -d
-# Open http://localhost:5000
-```
-
-### Re-authenticate (when session expires, ~90 days)
-
-```bash
-docker compose run --rm find-my-timeline find-my-timeline auth
-```
+The application remains licensed under the MIT License. Original copyright notices and attribution are retained in `LICENSE`.

@@ -1,0 +1,6 @@
+<CommunityApplications>
+  <Profile>Unofficial Unraid packaging and maintenance for Find My Timeline, a self-hosted application that stores historical location data from devices available through Apple's Find My service.</Profile>
+  <Icon>https://raw.githubusercontent.com/heckpiet/find-my-timeline-unraid/master/icon.svg</Icon>
+  <WebPage>https://github.com/heckpiet/find-my-timeline-unraid</WebPage>
+  <Forum>https://github.com/heckpiet/find-my-timeline-unraid/issues</Forum>
+</CommunityApplications>
