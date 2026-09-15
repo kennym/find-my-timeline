@@ -117,9 +117,14 @@ class LocationDatabase:
         """Get all known devices."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM devices ORDER BY last_seen DESC"
+                "SELECT d.*, EXISTS(SELECT 1 FROM locations l WHERE l.device_id = d.id) AS has_location FROM devices d ORDER BY d.last_seen DESC"
             ).fetchall()
-            return [dict(row) for row in rows]
+            devices = []
+            for row in rows:
+                device = dict(row)
+                device['has_location'] = bool(device['has_location'])
+                devices.append(device)
+            return devices
 
     def get_locations(
         self,

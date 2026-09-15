@@ -318,6 +318,69 @@
             color: #888;
             white-space: nowrap;
         }
+
+        .device-filter {
+            margin-bottom: 12px;
+        }
+
+        .device.inactive {
+            opacity: 0.62;
+        }
+
+        @media (max-width: 700px) {
+            body {
+                display: block;
+                height: auto;
+                min-height: 100vh;
+            }
+
+            #sidebar {
+                width: 100%;
+                max-height: 42vh;
+                padding: 12px;
+                gap: 12px;
+            }
+
+            #sidebar h1 {
+                font-size: 1.1rem;
+            }
+
+            #sidebar .section {
+                padding: 10px;
+            }
+
+            #sidebar .section:not(:first-of-type) {
+                display: none;
+            }
+
+            #devices-list {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 6px;
+                overflow-y: auto;
+            }
+
+            .device {
+                margin-bottom: 0;
+                min-width: 0;
+                padding: 8px;
+            }
+
+            .device-icon {
+                font-size: 1.2rem;
+            }
+
+            .device-name, .device-meta {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            #map {
+                height: 58vh;
+                min-height: 360px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -326,6 +389,14 @@
 
         <div class="section">
             <h2>Devices</h2>
+            <div class="device-filter">
+                <label for="device-filter">Show</label>
+                <select id="device-filter">
+                    <option value="all" selected>All devices</option>
+                    <option value="active">Active devices</option>
+                    <option value="inactive">Inactive devices</option>
+                </select>
+            </div>
             <div id="devices-list">
                 <p style="color: #666; font-size: 0.9rem;">Loading devices...</p>
             </div>
@@ -382,6 +453,7 @@
         let polylines = [];
         let selectedDevice = null;
         let selectedLocationId = null;
+        let deviceFilter = 'all';
         let currentLocations = [];
 
         // Device icons
@@ -428,13 +500,30 @@
                     return;
                 }
 
-                container.innerHTML = devices.map(device => `
-                    <div class="device ${selectedDevice === device.id ? 'active' : ''}"
+                const visibleDevices = devices.filter(device => {
+                    if (deviceFilter === 'active') return device.has_location;
+                    if (deviceFilter === 'inactive') return !device.has_location;
+                    return true;
+                });
+
+                if (selectedDevice && !visibleDevices.some(device => device.id === selectedDevice)) {
+                    selectedDevice = null;
+                    selectedLocationId = null;
+                    hideTimelinePanel();
+                }
+
+                if (visibleDevices.length === 0) {
+                    container.innerHTML = '<p style="color: #666;">No devices match this filter.</p>';
+                    return;
+                }
+
+                container.innerHTML = visibleDevices.map(device => `
+                    <div class="device ${selectedDevice === device.id ? 'active' : ''} ${device.has_location ? '' : 'inactive'}"
                          data-id="${device.id}">
                         <span class="device-icon">${getDeviceIcon(device.name)}</span>
                         <div class="device-info">
                             <div class="device-name">${device.name}</div>
-                            <div class="device-meta">${device.device_display_name || ''}</div>
+                            <div class="device-meta">${device.device_display_name || ''}${device.has_location ? '' : ' · No location data'}</div>
                         </div>
                     </div>
                 `).join('');
@@ -668,6 +757,11 @@
         });
 
         document.getElementById('time-range').addEventListener('change', loadLocations);
+
+        document.getElementById('device-filter').addEventListener('change', (event) => {
+            deviceFilter = event.target.value;
+            loadDevices();
+        });
 
         document.getElementById('timeline-close').addEventListener('click', () => {
             selectedDevice = null;
