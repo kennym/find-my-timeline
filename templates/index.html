@@ -18,6 +18,28 @@
             height: 100vh;
         }
 
+        #sidebar-toggle {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 1100;
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            font-size: 1.35rem;
+            line-height: 1;
+            border: 1px solid #405070;
+            background: #16213e;
+            color: #fff;
+        }
+
+        body.sidebar-collapsed #sidebar {
+            width: 0;
+            padding-left: 0;
+            padding-right: 0;
+            overflow: hidden;
+        }
+
         #sidebar {
             width: 320px;
             background: #1a1a2e;
@@ -350,7 +372,24 @@
             }
 
             #sidebar .section:not(:first-of-type) {
+                display: block;
+            }
+
+            #sidebar-toggle {
+                top: 8px;
+                left: 8px;
+            }
+
+            #sidebar h1 {
+                padding-left: 48px;
+            }
+
+            body.sidebar-collapsed #sidebar {
                 display: none;
+            }
+
+            body.sidebar-collapsed #map {
+                height: 100vh;
             }
 
             #devices-list {
@@ -384,6 +423,7 @@
     </style>
 </head>
 <body>
+    <button id="sidebar-toggle" type="button" aria-label="Close sidebar" aria-expanded="true" title="Close sidebar">☰</button>
     <div id="sidebar">
         <h1>Find My Timeline</h1>
 
@@ -403,18 +443,15 @@
         </div>
 
         <div class="section">
-            <h2>Time Range</h2>
+            <h2>Date Range</h2>
             <div class="controls">
                 <div>
-                    <label for="time-range">Quick Select</label>
-                    <select id="time-range">
-                        <option value="1">Last 1 hour</option>
-                        <option value="6">Last 6 hours</option>
-                        <option value="24" selected>Last 24 hours</option>
-                        <option value="168">Last 7 days</option>
-                        <option value="720">Last 30 days</option>
-                        <option value="0">All time</option>
-                    </select>
+                    <label for="start-date">From</label>
+                    <input id="start-date" type="date">
+                </div>
+                <div>
+                    <label for="end-date">To</label>
+                    <input id="end-date" type="date">
                 </div>
                 <button id="refresh-btn">Refresh Map</button>
             </div>
@@ -455,6 +492,18 @@
         let selectedLocationId = null;
         let deviceFilter = 'all';
         let currentLocations = [];
+
+        function formatInputDate(date) {
+            return date.toISOString().slice(0, 10);
+        }
+
+        const endDateInput = document.getElementById('end-date');
+        const startDateInput = document.getElementById('start-date');
+        const defaultEndDate = new Date();
+        const defaultStartDate = new Date(defaultEndDate);
+        defaultStartDate.setDate(defaultStartDate.getDate() - 7);
+        startDateInput.value = formatInputDate(defaultStartDate);
+        endDateInput.value = formatInputDate(defaultEndDate);
 
         // Device icons
         const deviceIcons = {
@@ -558,11 +607,15 @@
             polylines = [];
             currentLocations = [];
 
-            const hours = document.getElementById('time-range').value;
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
             let url = '/api/locations?limit=5000';
 
-            if (hours !== '0') {
-                url += `&hours=${hours}`;
+            if (startDate) {
+                url += `&start=${encodeURIComponent(startDate + 'T00:00:00')}`;
+            }
+            if (endDate) {
+                url += `&end=${encodeURIComponent(endDate + 'T23:59:59')}`;
             }
 
             if (selectedDevice) {
@@ -756,7 +809,17 @@
             loadStats();
         });
 
-        document.getElementById('time-range').addEventListener('change', loadLocations);
+        startDateInput.addEventListener('change', loadLocations);
+        endDateInput.addEventListener('change', loadLocations);
+
+        document.getElementById('sidebar-toggle').addEventListener('click', () => {
+            const collapsed = document.body.classList.toggle('sidebar-collapsed');
+            const toggle = document.getElementById('sidebar-toggle');
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+            toggle.setAttribute('aria-label', collapsed ? 'Open sidebar' : 'Close sidebar');
+            toggle.setAttribute('title', collapsed ? 'Open sidebar' : 'Close sidebar');
+            setTimeout(() => map.invalidateSize(), 0);
+        });
 
         document.getElementById('device-filter').addEventListener('change', (event) => {
             deviceFilter = event.target.value;
