@@ -446,6 +446,15 @@
             <h2>Date Range</h2>
             <div class="controls">
                 <div>
+                    <label for="date-preset">Quick range</label>
+                    <select id="date-preset">
+                        <option value="7" selected>Last 7 days</option>
+                        <option value="1">Last 1 day</option>
+                        <option value="30">Last 30 days</option>
+                        <option value="0">All time</option>
+                    </select>
+                </div>
+                <div>
                     <label for="start-date">From</label>
                     <input id="start-date" type="date">
                 </div>
@@ -504,6 +513,19 @@
         defaultStartDate.setDate(defaultStartDate.getDate() - 7);
         startDateInput.value = formatInputDate(defaultStartDate);
         endDateInput.value = formatInputDate(defaultEndDate);
+
+        function setDateRangeFromPreset(days) {
+            if (days === 0) {
+                startDateInput.value = '';
+                endDateInput.value = '';
+                return;
+            }
+            const end = new Date();
+            const start = new Date(end);
+            start.setDate(start.getDate() - (days - 1));
+            startDateInput.value = formatInputDate(start);
+            endDateInput.value = formatInputDate(end);
+        }
 
         // Device icons
         const deviceIcons = {
@@ -809,8 +831,19 @@
             loadStats();
         });
 
-        startDateInput.addEventListener('change', loadLocations);
-        endDateInput.addEventListener('change', loadLocations);
+        document.getElementById('date-preset').addEventListener('change', (event) => {
+            setDateRangeFromPreset(Number(event.target.value));
+            loadLocations();
+        });
+
+        startDateInput.addEventListener('change', () => {
+            document.getElementById('date-preset').value = '';
+            loadLocations();
+        });
+        endDateInput.addEventListener('change', () => {
+            document.getElementById('date-preset').value = '';
+            loadLocations();
+        });
 
         document.getElementById('sidebar-toggle').addEventListener('click', () => {
             const collapsed = document.body.classList.toggle('sidebar-collapsed');
