@@ -18,6 +18,28 @@
             height: 100vh;
         }
 
+        #sidebar-toggle {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 1100;
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            font-size: 1.35rem;
+            line-height: 1;
+            border: 1px solid #405070;
+            background: #16213e;
+            color: #fff;
+        }
+
+        body.sidebar-collapsed #sidebar {
+            width: 0;
+            padding-left: 0;
+            padding-right: 0;
+            overflow: hidden;
+        }
+
         #sidebar {
             width: 320px;
             background: #1a1a2e;
@@ -318,32 +340,127 @@
             color: #888;
             white-space: nowrap;
         }
+
+        .device-filter {
+            margin-bottom: 12px;
+        }
+
+        .device.inactive {
+            opacity: 0.62;
+        }
+
+        @media (max-width: 700px) {
+            body {
+                display: block;
+                height: auto;
+                min-height: 100vh;
+            }
+
+            #sidebar {
+                width: 100%;
+                max-height: 42vh;
+                padding: 12px;
+                gap: 12px;
+            }
+
+            #sidebar h1 {
+                font-size: 1.1rem;
+            }
+
+            #sidebar .section {
+                padding: 10px;
+            }
+
+            #sidebar .section:not(:first-of-type) {
+                display: block;
+            }
+
+            #sidebar-toggle {
+                top: 8px;
+                left: 8px;
+            }
+
+            #sidebar h1 {
+                padding-left: 48px;
+            }
+
+            body.sidebar-collapsed #sidebar {
+                display: none;
+            }
+
+            body.sidebar-collapsed #map {
+                height: 100vh;
+            }
+
+            #devices-list {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 6px;
+                overflow-y: auto;
+            }
+
+            .device {
+                margin-bottom: 0;
+                min-width: 0;
+                padding: 8px;
+            }
+
+            .device-icon {
+                font-size: 1.2rem;
+            }
+
+            .device-name, .device-meta {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            #map {
+                height: 58vh;
+                min-height: 360px;
+            }
+        }
     </style>
 </head>
 <body>
+    <button id="sidebar-toggle" type="button" aria-label="Close sidebar" aria-expanded="true" title="Close sidebar">☰</button>
     <div id="sidebar">
         <h1>Find My Timeline</h1>
 
         <div class="section">
             <h2>Devices</h2>
+            <div class="device-filter">
+                <label for="device-filter">Show</label>
+                <select id="device-filter">
+                    <option value="all" selected>All devices</option>
+                    <option value="active">Active devices</option>
+                    <option value="inactive">Inactive devices</option>
+                </select>
+            </div>
             <div id="devices-list">
                 <p style="color: #666; font-size: 0.9rem;">Loading devices...</p>
             </div>
         </div>
 
         <div class="section">
-            <h2>Time Range</h2>
+            <h2>Date Range</h2>
             <div class="controls">
                 <div>
-                    <label for="time-range">Quick Select</label>
-                    <select id="time-range">
-                        <option value="1">Last 1 hour</option>
-                        <option value="6">Last 6 hours</option>
-                        <option value="24" selected>Last 24 hours</option>
-                        <option value="168">Last 7 days</option>
-                        <option value="720">Last 30 days</option>
+                    <label for="date-preset">Quick range</label>
+                    <select id="date-preset">
+                        <option value="7" selected>Last 7 days</option>
+                        <option value="1">Last 1 day</option>
+                        <option value="30">Last 30 days</option>
                         <option value="0">All time</option>
                     </select>
+                </div>
+                <div>
+                    <label for="start-date">From</label>
+                    <input id="start-date" type="date">
+                </div>
+                <div>
+                    <label for="end-date">To</label>
+                    <input id="end-date" type="date">
                 </div>
                 <button id="refresh-btn">Refresh Map</button>
             </div>
@@ -382,7 +499,33 @@
         let polylines = [];
         let selectedDevice = null;
         let selectedLocationId = null;
+        let deviceFilter = 'all';
         let currentLocations = [];
+
+        function formatInputDate(date) {
+            return date.toISOString().slice(0, 10);
+        }
+
+        const endDateInput = document.getElementById('end-date');
+        const startDateInput = document.getElementById('start-date');
+        const defaultEndDate = new Date();
+        const defaultStartDate = new Date(defaultEndDate);
+        defaultStartDate.setDate(defaultStartDate.getDate() - 7);
+        startDateInput.value = formatInputDate(defaultStartDate);
+        endDateInput.value = formatInputDate(defaultEndDate);
+
+        function setDateRangeFromPreset(days) {
+            if (days === 0) {
+                startDateInput.value = '';
+                endDateInput.value = '';
+                return;
+            }
+            const end = new Date();
+            const start = new Date(end);
+            start.setDate(start.getDate() - (days - 1));
+            startDateInput.value = formatInputDate(start);
+            endDateInput.value = formatInputDate(end);
+        }
 
         // Device icons
         const deviceIcons = {
@@ -428,13 +571,30 @@
                     return;
                 }
 
-                container.innerHTML = devices.map(device => `
-                    <div class="device ${selectedDevice === device.id ? 'active' : ''}"
+                const visibleDevices = devices.filter(device => {
+                    if (deviceFilter === 'active') return device.has_location;
+                    if (deviceFilter === 'inactive') return !device.has_location;
+                    return true;
+                });
+
+                if (selectedDevice && !visibleDevices.some(device => device.id === selectedDevice)) {
+                    selectedDevice = null;
+                    selectedLocationId = null;
+                    hideTimelinePanel();
+                }
+
+                if (visibleDevices.length === 0) {
+                    container.innerHTML = '<p style="color: #666;">No devices match this filter.</p>';
+                    return;
+                }
+
+                container.innerHTML = visibleDevices.map(device => `
+                    <div class="device ${selectedDevice === device.id ? 'active' : ''} ${device.has_location ? '' : 'inactive'}"
                          data-id="${device.id}">
                         <span class="device-icon">${getDeviceIcon(device.name)}</span>
                         <div class="device-info">
                             <div class="device-name">${device.name}</div>
-                            <div class="device-meta">${device.device_display_name || ''}</div>
+                            <div class="device-meta">${device.device_display_name || ''}${device.has_location ? '' : ' · No location data'}</div>
                         </div>
                     </div>
                 `).join('');
@@ -469,11 +629,15 @@
             polylines = [];
             currentLocations = [];
 
-            const hours = document.getElementById('time-range').value;
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
             let url = '/api/locations?limit=5000';
 
-            if (hours !== '0') {
-                url += `&hours=${hours}`;
+            if (startDate) {
+                url += `&start=${encodeURIComponent(startDate + 'T00:00:00')}`;
+            }
+            if (endDate) {
+                url += `&end=${encodeURIComponent(endDate + 'T23:59:59')}`;
             }
 
             if (selectedDevice) {
@@ -667,7 +831,33 @@
             loadStats();
         });
 
-        document.getElementById('time-range').addEventListener('change', loadLocations);
+        document.getElementById('date-preset').addEventListener('change', (event) => {
+            setDateRangeFromPreset(Number(event.target.value));
+            loadLocations();
+        });
+
+        startDateInput.addEventListener('change', () => {
+            document.getElementById('date-preset').value = '';
+            loadLocations();
+        });
+        endDateInput.addEventListener('change', () => {
+            document.getElementById('date-preset').value = '';
+            loadLocations();
+        });
+
+        document.getElementById('sidebar-toggle').addEventListener('click', () => {
+            const collapsed = document.body.classList.toggle('sidebar-collapsed');
+            const toggle = document.getElementById('sidebar-toggle');
+            toggle.setAttribute('aria-expanded', String(!collapsed));
+            toggle.setAttribute('aria-label', collapsed ? 'Open sidebar' : 'Close sidebar');
+            toggle.setAttribute('title', collapsed ? 'Open sidebar' : 'Close sidebar');
+            setTimeout(() => map.invalidateSize(), 0);
+        });
+
+        document.getElementById('device-filter').addEventListener('change', (event) => {
+            deviceFilter = event.target.value;
+            loadDevices();
+        });
 
         document.getElementById('timeline-close').addEventListener('click', () => {
             selectedDevice = null;
